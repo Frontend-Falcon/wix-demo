@@ -1,5 +1,5 @@
 import { memberId } from "./constants";
-import { wixFetch } from "./wix-client";
+import { wixFetch, WixApiError } from "./wix-client";
 import { buildDraftPostBody, type DraftPostBody, type PostFormInput } from "./post-payload";
 import { collectExternalImageUrls, replaceExternalImageSrcs, type RicosDocument } from "./ricos-images";
 import { importExternalImage } from "./wix-media";
@@ -116,7 +116,9 @@ export async function listPublishedPosts(): Promise<PostListItem[]> {
 }
 
 export async function getDraftPost(id: string): Promise<RawDraftPost> {
-  const res = await wixFetch<{ draftPost: RawDraftPost }>(`/blog/v3/draft-posts/${id}`);
+  const res = await wixFetch<{ draftPost: RawDraftPost }>(
+    `/blog/v3/draft-posts/${encodeURIComponent(id)}`
+  );
   return res.draftPost;
 }
 
@@ -129,6 +131,8 @@ export async function createDraftPost(
   richContent = await importRicosImages(richContent);
 
   let heroImageId: string | undefined;
+  // Unlike body images, a failed cover-image import fails the whole save —
+  // the cover is prominent enough that silently dropping it isn't acceptable.
   if (coverImageUrl) heroImageId = (await importExternalImage(coverImageUrl)).id;
 
   const draftPost = buildDraftPostBody(input, richContent, memberId, heroImageId);
@@ -151,6 +155,8 @@ export async function updateDraftPost(
   richContent = await importRicosImages(richContent);
 
   let heroImageId: string | undefined;
+  // Unlike body images, a failed cover-image import fails the whole save —
+  // the cover is prominent enough that silently dropping it isn't acceptable.
   if (coverImageUrl) heroImageId = (await importExternalImage(coverImageUrl)).id;
 
   const draftPost: DraftPostBody & { id: string } = {
@@ -160,33 +166,47 @@ export async function updateDraftPost(
   const action =
     currentStatus === "published" ? "UPDATE_PUBLICATION" : publish ? "UPDATE_PUBLISH" : "UPDATE";
 
-  await wixFetch(`/blog/v3/draft-posts/${id}`, {
+  await wixFetch(`/blog/v3/draft-posts/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify({ draftPost, action }),
   });
 }
 
 export async function publishDraftPost(id: string): Promise<void> {
-  await wixFetch(`/blog/v3/draft-posts/${id}/publish`, { method: "POST" });
+  await wixFetch(`/blog/v3/draft-posts/${encodeURIComponent(id)}/publish`, { method: "POST" });
 }
 
 export async function deletePost(id: string): Promise<void> {
-  await wixFetch(`/blog/v3/draft-posts/${id}`, { method: "DELETE" });
+  await wixFetch(`/blog/v3/draft-posts/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 export async function getPublishedPostUrl(id: string): Promise<string | undefined> {
   const res = await wixFetch<{ post: { url?: { base: string; path: string } } }>(
-    `/v3/posts/${id}?fieldsets=URL`
+    `/v3/posts/${encodeURIComponent(id)}?fieldsets=URL`
   );
   return res.post.url ? `${res.post.url.base}${res.post.url.path}` : undefined;
 }
 
-export async function readSeoTags(id: string): Promise<{ title?: string; description?: string }> {
+async function fetchExistingSeoTags(id: string): Promise<SeoTag[]> {
   try {
     const current = await wixFetch<{ itemSeoTags: { tags: SeoTag[] } }>(
-      `/promote/seo/v1/item-seo-tags/BLOG_POST/${id}`
+      `/promote/seo/v1/item-seo-tags/BLOG_POST/${encodeURIComponent(id)}`
     );
-    return extractSeoValues(current.itemSeoTags.tags);
+    return current.itemSeoTags.tags;
+  } catch (error) {
+    if (error instanceof WixApiError && error.status === 404) {
+      // ponytail: a brand-new post may not be SEO-indexed yet — start from an
+      // empty tag list instead of failing the save.
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function readSeoTags(id: string): Promise<{ title?: string; description?: string }> {
+  try {
+    const tags = await fetchExistingSeoTags(id);
+    return extractSeoValues(tags);
   } catch {
     return {};
   }
@@ -198,19 +218,9 @@ export async function writeSeoTags(
 ): Promise<void> {
   if (input.title === undefined && input.description === undefined) return;
 
-  let existing: SeoTag[] = [];
-  try {
-    const current = await wixFetch<{ itemSeoTags: { tags: SeoTag[] } }>(
-      `/promote/seo/v1/item-seo-tags/BLOG_POST/${id}`
-    );
-    existing = current.itemSeoTags.tags;
-  } catch {
-    // ponytail: a brand-new post may not be SEO-indexed yet — start from an
-    // empty tag list instead of failing the save.
-  }
-
+  const existing = await fetchExistingSeoTags(id);
   const tags = mergeSeoTags(existing, input);
-  await wixFetch(`/promote/seo/v1/item-seo-tags/BLOG_POST/${id}`, {
+  await wixFetch(`/promote/seo/v1/item-seo-tags/BLOG_POST/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify({ itemSeoTags: { tags }, fieldMask: "tags" }),
   });
