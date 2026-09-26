@@ -2,16 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import type { PostListItem } from "@/utils/wix-blog";
 import { ViewPostModal } from "./components/ViewPostModal";
-
-interface PostListItem {
-  id: string;
-  title: string;
-  status: "draft" | "published";
-  hashtags: string[];
-  editedDate?: string;
-  url?: string;
-}
 
 export default function Home() {
   const [posts, setPosts] = useState<PostListItem[]>([]);
@@ -101,11 +93,11 @@ export default function Home() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/30 text-zinc-600 dark:border-white/10 dark:text-zinc-400">
-                <th className="py-2">Title</th>
-                <th className="py-2">Status</th>
-                <th className="py-2">Hashtags</th>
-                <th className="py-2">Last edited</th>
-                <th className="py-2" />
+                <th className="py-2" scope="col">Title</th>
+                <th className="py-2" scope="col">Status</th>
+                <th className="py-2" scope="col">Hashtags</th>
+                <th className="py-2" scope="col">Last edited</th>
+                <th className="py-2" scope="col" />
               </tr>
             </thead>
             <tbody>
