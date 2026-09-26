@@ -5,6 +5,7 @@ import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PostFormSnapshot } from "@/utils/wix-blog";
+import { apiErrorMessage } from "@/utils/wix-client";
 
 export type PostFormValues = Omit<PostFormSnapshot, "status">;
 
@@ -57,7 +58,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
       });
       const result = await response.json();
       if (!response.ok) {
-        throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
+        throw new Error(apiErrorMessage(result.error, "Failed to save post"));
       }
 
       if (result.url) sessionStorage.setItem("viewPostUrl", result.url);

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { PostListItem } from "@/utils/wix-blog";
+import { apiErrorMessage } from "@/utils/wix-client";
 import { ViewPostModal } from "./components/ViewPostModal";
 
 export default function Home() {
@@ -19,7 +20,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/posts");
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Failed to load posts");
+      if (!response.ok) throw new Error(apiErrorMessage(result.error, "Failed to load posts"));
       setPosts(result.posts);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load posts");
@@ -51,7 +52,7 @@ export default function Home() {
     try {
       const response = await fetch(`/api/posts/${id}`, { method: "DELETE" });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Failed to delete post");
+      if (!response.ok) throw new Error(apiErrorMessage(result.error, "Failed to delete post"));
       await loadPosts();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to delete post");
@@ -65,7 +66,7 @@ export default function Home() {
     try {
       const response = await fetch(`/api/posts/${id}/publish`, { method: "POST" });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? "Failed to publish post");
+      if (!response.ok) throw new Error(apiErrorMessage(result.error, "Failed to publish post"));
       if (result.url) setViewUrl(result.url);
       await loadPosts();
     } catch (publishError) {

@@ -41,13 +41,25 @@ export interface PostFormSnapshot {
   seoDescription: string;
 }
 
+// A pasted raw API response (e.g. a JSON-quoted `"<style>...</style>..."` string,
+// escapes and all) parses as JSON but real HTML never does - unwrap it so a
+// paste mistake doesn't silently ship broken image src URLs.
+function unwrapJsonEncodedHtml(html: string): string {
+  try {
+    const parsed = JSON.parse(html);
+    return typeof parsed === "string" ? parsed : html;
+  } catch {
+    return html;
+  }
+}
+
 export async function convertHtmlToRicos(html: string): Promise<RicosDocument> {
   const res = await wixFetch<{ document: RicosDocument }>(
     "/ricos/v1/ricos-document/convert/to-ricos",
     {
       method: "POST",
       body: JSON.stringify({
-        html,
+        html: unwrapJsonEncodedHtml(html),
         options: {
           plugins: ["HEADING", "LINK", "IMAGE", "TEXT_COLOR", "TEXT_HIGHLIGHT", "DIVIDER", "TABLE"],
         },
@@ -116,8 +128,10 @@ export async function listPublishedPosts(): Promise<PostListItem[]> {
 }
 
 export async function getDraftPost(id: string): Promise<RawDraftPost> {
+  // Wix omits richContent from the default fieldset - without this, editing
+  // an existing post loads an empty HTML field and re-saving wipes its content.
   const res = await wixFetch<{ draftPost: RawDraftPost }>(
-    `/blog/v3/draft-posts/${encodeURIComponent(id)}`
+    `/blog/v3/draft-posts/${encodeURIComponent(id)}?fieldsets=RICH_CONTENT`
   );
   return res.draftPost;
 }
@@ -177,6 +191,14 @@ export async function publishDraftPost(id: string): Promise<void> {
 }
 
 export async function deletePost(id: string): Promise<void> {
+  // Deleting a published post's draft-post entity returns 200 but leaves the
+  // post live on `/v3/posts` - Wix only actually removes it once it's back to
+  // draft status. Reverting first is a harmless no-op for posts already
+  // unpublished, so it's always safe to do before deleting.
+  await wixFetch(`/blog/v3/draft-posts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ action: "UPDATE_REVERT_TO_DRAFT", draftPost: { id } }),
+  });
   await wixFetch(`/blog/v3/draft-posts/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 

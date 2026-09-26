@@ -35,6 +35,17 @@ export async function wixFetch<T = unknown>(
   return body as T;
 }
 
+// Client-safe: extracts a readable message from this app's { error } response
+// shape, where `error` can be a plain string or a Wix API error body object.
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  if (error == null) return fallback;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  return JSON.stringify(error);
+}
+
 export function toErrorResponse(error: unknown): Response {
   if (error instanceof WixApiError) {
     return Response.json({ error: error.body ?? error.message }, { status: error.status });

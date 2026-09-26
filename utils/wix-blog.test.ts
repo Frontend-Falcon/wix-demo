@@ -6,9 +6,30 @@ vi.mock("./wix-client", async () => {
 });
 
 import { wixFetch, WixApiError } from "./wix-client";
-import { updateDraftPost, writeSeoTags } from "./wix-blog";
+import { convertHtmlToRicos, deletePost, updateDraftPost, writeSeoTags } from "./wix-blog";
 
 const mockedWixFetch = wixFetch as unknown as ReturnType<typeof vi.fn>;
+
+describe("convertHtmlToRicos JSON-paste guard", () => {
+  beforeEach(() => {
+    mockedWixFetch.mockReset();
+    mockedWixFetch.mockResolvedValue({ document: { nodes: [] } });
+  });
+
+  it("unwraps a pasted JSON-quoted string into the real HTML", async () => {
+    await convertHtmlToRicos('"<p>Hi</p>"');
+
+    const [, init] = mockedWixFetch.mock.calls[0];
+    expect(JSON.parse(init.body).html).toBe("<p>Hi</p>");
+  });
+
+  it("leaves real HTML with quoted attributes untouched", async () => {
+    await convertHtmlToRicos('<img src="https://example.com/a.png">');
+
+    const [, init] = mockedWixFetch.mock.calls[0];
+    expect(JSON.parse(init.body).html).toBe('<img src="https://example.com/a.png">');
+  });
+});
 
 describe("updateDraftPost action selection", () => {
   beforeEach(() => {
@@ -48,6 +69,30 @@ describe("updateDraftPost action selection", () => {
 
     const patchCall = mockedWixFetch.mock.calls[1];
     expect(JSON.parse(patchCall[1].body).action).toBe("UPDATE_PUBLICATION");
+  });
+});
+
+describe("deletePost", () => {
+  beforeEach(() => {
+    mockedWixFetch.mockReset();
+  });
+
+  it("reverts the post to draft before deleting, so a published post is actually removed", async () => {
+    mockedWixFetch.mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined);
+
+    await deletePost("post-1");
+
+    expect(mockedWixFetch).toHaveBeenCalledTimes(2);
+    const [revertPath, revertInit] = mockedWixFetch.mock.calls[0];
+    expect(revertPath).toBe("/blog/v3/draft-posts/post-1");
+    expect(revertInit.method).toBe("PATCH");
+    expect(JSON.parse(revertInit.body)).toEqual({
+      action: "UPDATE_REVERT_TO_DRAFT",
+      draftPost: { id: "post-1" },
+    });
+    const [deletePath, deleteInit] = mockedWixFetch.mock.calls[1];
+    expect(deletePath).toBe("/blog/v3/draft-posts/post-1");
+    expect(deleteInit.method).toBe("DELETE");
   });
 });
 
