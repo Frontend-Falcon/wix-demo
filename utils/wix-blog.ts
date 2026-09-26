@@ -212,18 +212,36 @@ export async function readSeoTags(id: string): Promise<{ title?: string; descrip
   }
 }
 
+export interface WriteSeoTagsResult {
+  ok: boolean;
+  error?: string;
+}
+
 export async function writeSeoTags(
   id: string,
   input: { title?: string; description?: string }
-): Promise<void> {
-  if (input.title === undefined && input.description === undefined) return;
+): Promise<WriteSeoTagsResult> {
+  if (input.title === undefined && input.description === undefined) return { ok: true };
 
-  const existing = await fetchExistingSeoTags(id);
-  const tags = mergeSeoTags(existing, input);
-  await wixFetch(`/promote/seo/v1/item-seo-tags/BLOG_POST/${encodeURIComponent(id)}`, {
-    method: "PATCH",
-    body: JSON.stringify({ itemSeoTags: { tags }, fieldMask: "tags" }),
-  });
+  try {
+    const existing = await fetchExistingSeoTags(id);
+    const tags = mergeSeoTags(existing, input);
+    await wixFetch(`/promote/seo/v1/item-seo-tags/BLOG_POST/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ itemSeoTags: { tags }, fieldMask: "tags" }),
+    });
+    return { ok: true };
+  } catch (error) {
+    // ponytail: the post itself (create/update/publish) already succeeded by
+    // the time this runs — SEO tags are a layer on top of it, on a separate
+    // Wix API that can reject a given site/post for reasons outside this
+    // app's control (observed: a site without the SEO app fully configured
+    // returns a generic 400 here). Don't fail the whole save over it; report
+    // it back to the caller instead so the UI can show a non-blocking warning.
+    console.error("writeSeoTags failed for post", id, error);
+    const message = error instanceof WixApiError ? `Wix SEO API error ${error.status}` : "Unknown error";
+    return { ok: false, error: message };
+  }
 }
 
 export async function loadPostFormSnapshot(id: string): Promise<PostFormSnapshot> {

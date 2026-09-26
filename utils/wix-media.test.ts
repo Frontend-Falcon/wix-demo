@@ -42,6 +42,32 @@ describe("importExternalImage", () => {
     expect(result).toEqual({ id: "media-1", width: 1200, height: 800 });
   });
 
+  it("keeps polling past a zero-size placeholder instead of treating it as ready", async () => {
+    mockedWixFetch
+      .mockResolvedValueOnce({ file: { id: "media-1", operationStatus: "PENDING" } })
+      .mockResolvedValueOnce({
+        file: {
+          id: "media-1",
+          operationStatus: "PENDING",
+          media: { image: { image: { width: 0, height: 0 } } },
+        },
+      })
+      .mockResolvedValueOnce({
+        file: {
+          id: "media-1",
+          operationStatus: "READY",
+          media: { image: { image: { width: 400, height: 300 } } },
+        },
+      });
+
+    const result = await importExternalImage("https://example.com/a.jpg", {
+      pollAttempts: 4,
+      pollDelayMs: 0,
+    });
+
+    expect(result).toEqual({ id: "media-1", width: 400, height: 300 });
+  });
+
   it("throws if the import fails", async () => {
     mockedWixFetch
       .mockResolvedValueOnce({ file: { id: "media-1", operationStatus: "PENDING" } })

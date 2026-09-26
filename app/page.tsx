@@ -10,6 +10,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewUrl, setViewUrl] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const loadPosts = useCallback(async () => {
@@ -36,6 +37,11 @@ export default function Home() {
     if (stored) {
       setViewUrl(stored);
       sessionStorage.removeItem("viewPostUrl");
+    }
+    const storedWarning = sessionStorage.getItem("postSaveWarning");
+    if (storedWarning) {
+      setWarning(storedWarning);
+      sessionStorage.removeItem("postSaveWarning");
     }
   }, []);
 
@@ -81,6 +87,15 @@ export default function Home() {
       {error && (
         <p className="rounded-2xl border border-red-300/60 bg-red-50/70 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
           {error}
+        </p>
+      )}
+
+      {warning && (
+        <p
+          role="status"
+          className="rounded-2xl border border-amber-300/60 bg-amber-50/70 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
+        >
+          {warning}
         </p>
       )}
 

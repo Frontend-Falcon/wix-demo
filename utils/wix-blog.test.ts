@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("./wix-client", () => ({ wixFetch: vi.fn() }));
+vi.mock("./wix-client", async () => {
+  const actual = await vi.importActual<typeof import("./wix-client")>("./wix-client");
+  return { ...actual, wixFetch: vi.fn() };
+});
 
-import { wixFetch } from "./wix-client";
+import { wixFetch, WixApiError } from "./wix-client";
 import { updateDraftPost, writeSeoTags } from "./wix-blog";
 
 const mockedWixFetch = wixFetch as unknown as ReturnType<typeof vi.fn>;
@@ -65,8 +68,9 @@ describe("writeSeoTags", () => {
       })
       .mockResolvedValueOnce(undefined);
 
-    await writeSeoTags("post-1", { title: "New title" });
+    const result = await writeSeoTags("post-1", { title: "New title" });
 
+    expect(result).toEqual({ ok: true });
     const patchCall = mockedWixFetch.mock.calls[1];
     const body = JSON.parse(patchCall[1].body);
     expect(body.fieldMask).toBe("tags");
@@ -74,5 +78,16 @@ describe("writeSeoTags", () => {
       { type: "meta", props: { name: "og:image", content: "x.jpg" } },
       { type: "title", children: "New title" },
     ]);
+  });
+
+  it("reports a failed write as a non-throwing result instead of failing the whole save", async () => {
+    mockedWixFetch
+      .mockResolvedValueOnce({ itemSeoTags: { tags: [] } })
+      .mockRejectedValueOnce(new WixApiError(400, null));
+
+    const result = await writeSeoTags("post-1", { title: "New title" });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("Wix SEO API error 400");
   });
 });

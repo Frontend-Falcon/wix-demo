@@ -42,10 +42,20 @@ export async function POST(request: Request) {
     }
 
     const id = await createDraftPost(body, body.html, body.coverImageUrl);
-    if (body.publish) await publishDraftPost(id);
-    await writeSeoTags(id, { title: body.seoTitle, description: body.seoDescription });
+    let seoWarning: string | undefined;
+    if (body.publish) {
+      await publishDraftPost(id);
+      // Wix's Item SEO Tags API 404s for a post with no live page yet, so this
+      // can only run once the post is actually published. A failure here
+      // doesn't undo the publish - it's reported back as a warning, not an error.
+      const seoResult = await writeSeoTags(id, { title: body.seoTitle, description: body.seoDescription });
+      if (!seoResult.ok) seoWarning = seoResult.error;
+    }
     const url = body.publish ? await getPublishedPostUrl(id) : undefined;
-    return Response.json({ id, status: body.publish ? "published" : "draft", url }, { status: 201 });
+    return Response.json(
+      { id, status: body.publish ? "published" : "draft", url, seoWarning },
+      { status: 201 }
+    );
   } catch (error) {
     return toErrorResponse(error);
   }

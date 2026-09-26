@@ -33,11 +33,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const draftPost = await getDraftPost(id);
     const currentStatus = draftPost.status === "PUBLISHED" ? "published" : "draft";
     await updateDraftPost(id, body, body.html, currentStatus, body.publish, body.coverImageUrl);
-    await writeSeoTags(id, { title: body.seoTitle, description: body.seoDescription });
 
     const isNowPublished = currentStatus === "published" || body.publish;
+    // Wix's Item SEO Tags API 404s for a post with no live page yet, so this
+    // can only run once the post is (or already was) published. A failure
+    // here doesn't undo the update - it's reported back as a warning.
+    let seoWarning: string | undefined;
+    if (isNowPublished) {
+      const seoResult = await writeSeoTags(id, { title: body.seoTitle, description: body.seoDescription });
+      if (!seoResult.ok) seoWarning = seoResult.error;
+    }
     const url = isNowPublished ? await getPublishedPostUrl(id) : undefined;
-    return Response.json({ id, status: isNowPublished ? "published" : "draft", url });
+    return Response.json({ id, status: isNowPublished ? "published" : "draft", url, seoWarning });
   } catch (error) {
     return toErrorResponse(error);
   }

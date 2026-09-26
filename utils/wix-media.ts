@@ -44,7 +44,11 @@ export async function importExternalImage(
       `/site-media/v1/files/get-file-by-id?fileId=${encodeURIComponent(file.id)}`
     );
     const dims = status.file.media?.image?.image;
-    if (dims) return { id: file.id, width: dims.width, height: dims.height };
+    // Wix can return a placeholder { width: 0, height: 0 } before the real
+    // dimensions are computed - a truthy object with zero size isn't "ready".
+    if (dims && dims.width > 0 && dims.height > 0) {
+      return { id: file.id, width: dims.width, height: dims.height };
+    }
     if (status.file.operationStatus === "FAILED") {
       throw new Error(`Wix Media import failed for ${url}`);
     }

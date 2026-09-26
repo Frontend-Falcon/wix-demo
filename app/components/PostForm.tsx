@@ -61,6 +61,12 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
       }
 
       if (result.url) sessionStorage.setItem("viewPostUrl", result.url);
+      if (result.seoWarning) {
+        sessionStorage.setItem(
+          "postSaveWarning",
+          `Post saved, but SEO tags couldn't be written: ${result.seoWarning}`
+        );
+      }
       router.push("/");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Something went wrong");
