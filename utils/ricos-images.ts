@@ -36,6 +36,7 @@ export function collectExternalImageUrls(nodes: RicosNode[] | undefined): string
   return [...urls];
 }
 
+/** Mutates `nodes` in place (rewrites matched IMAGE src/width/height); does not return a copy. */
 export function replaceExternalImageSrcs(
   nodes: RicosNode[] | undefined,
   imported: Map<string, { id: string; width: number; height: number }>
@@ -48,8 +49,8 @@ export function replaceExternalImageSrcs(
         const match = imported.get(image.src.url);
         if (match) {
           image.src = { id: match.id };
-          if (!image.width) image.width = match.width;
-          if (!image.height) image.height = match.height;
+          if (image.width === undefined) image.width = match.width;
+          if (image.height === undefined) image.height = match.height;
         }
       }
       walk(node.nodes);

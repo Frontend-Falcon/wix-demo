@@ -8,8 +8,23 @@ describe("collectExternalImageUrls", () => {
       {
         type: "TABLE",
         nodes: [
-          { type: "IMAGE", imageData: { image: { src: { url: "https://example.com/a.jpg" } } } },
-          { type: "IMAGE", imageData: { image: { src: { url: "https://example.com/a.jpg" } } } },
+          {
+            type: "TABLE_ROW",
+            nodes: [
+              {
+                type: "TABLE_CELL",
+                nodes: [
+                  { type: "IMAGE", imageData: { image: { src: { url: "https://example.com/a.jpg" } } } },
+                ],
+              },
+              {
+                type: "TABLE_CELL",
+                nodes: [
+                  { type: "IMAGE", imageData: { image: { src: { url: "https://example.com/a.jpg" } } } },
+                ],
+              },
+            ],
+          },
         ],
       },
       { type: "IMAGE", imageData: { image: { src: { id: "already-imported" } } } },
