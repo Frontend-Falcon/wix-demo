@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Wix API collection — contains a live AUTH_TOKEN, never commit
+Wix Integration.yml
