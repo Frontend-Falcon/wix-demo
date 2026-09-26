@@ -41,4 +41,14 @@ describe("importExternalImage", () => {
 
     expect(result).toEqual({ id: "media-1", width: 1200, height: 800 });
   });
+
+  it("throws if the import fails", async () => {
+    mockedWixFetch
+      .mockResolvedValueOnce({ file: { id: "media-1", operationStatus: "PENDING" } })
+      .mockResolvedValueOnce({ file: { id: "media-1", operationStatus: "FAILED" } });
+
+    await expect(
+      importExternalImage("https://example.com/a.jpg", { pollAttempts: 3, pollDelayMs: 0 })
+    ).rejects.toThrow("Wix Media import failed");
+  });
 });

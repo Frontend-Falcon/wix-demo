@@ -45,7 +45,9 @@ export async function importExternalImage(
     );
     const dims = status.file.media?.image?.image;
     if (dims) return { id: file.id, width: dims.width, height: dims.height };
-    if (status.file.operationStatus === "FAILED") break;
+    if (status.file.operationStatus === "FAILED") {
+      throw new Error(`Wix Media import failed for ${url}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
   }
 
