@@ -13,7 +13,10 @@ export class WixApiError extends Error {
   }
 }
 
-export async function wixFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+export async function wixFetch<T = unknown>(
+  path: string,
+  init: Omit<RequestInit, "headers"> & { headers?: Record<string, string> } = {}
+): Promise<T> {
   const token = process.env.AUTH_TOKEN;
   if (!token) throw new Error("AUTH_TOKEN environment variable is not set");
 
