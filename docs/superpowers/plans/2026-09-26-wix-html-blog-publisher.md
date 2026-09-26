@@ -29,6 +29,8 @@ utils/
   wix-blog.test.ts       (new) — targeted tests for action-selection and SEO-skip branches
 
 app/
+  globals.css               (modify) — Liquid Glass design tokens (see Task 11)
+  layout.tsx                 (modify) — adds the fixed gradient backdrop layer
   api/
     posts/
       route.ts                 (new) — GET list, POST create
@@ -50,6 +52,17 @@ app/
 .gitignore                 (modify) — ignore "Wix Integration.yml"
 package.json                (modify) — add vitest devDependency + "test" script
 ```
+
+**Visual design note (added after the original plan was written):** this is an internal
+single-operator tool (a form + a table), not a marketing page — most of the `design-taste-frontend`
+skill (heroes, scroll choreography, bento grids, motion choreography) doesn't apply here, and the
+skill itself says so (dashboards/dense product UI are out of its scope). What *does* apply, per
+explicit request, is an Apple Liquid Glass materiality treatment on the surfaces: panels, buttons,
+and inputs get a frosted-glass look (translucency, blur, a soft top highlight, a tinted shadow)
+over a subtle gradient backdrop, in both light and dark mode, with a `prefers-reduced-transparency`
+fallback to solid fills. Shape rule (locked, applies to every component below): **panels and the
+page backdrop use a 24px radius, inputs use a 14px radius, buttons are full-pill** — no other radii
+appear anywhere in this UI.
 
 ---
 
@@ -1348,12 +1361,173 @@ git commit -m "feat: add publish route for a draft post"
 
 ---
 
-## Task 11: `app/components/ViewPostModal.tsx` — publish/view popup
+## Task 11: Liquid Glass design tokens + `ViewPostModal.tsx`
 
 **Files:**
+- Modify: `app/globals.css`
+- Modify: `app/layout.tsx`
 - Create: `app/components/ViewPostModal.tsx`
 
-- [ ] **Step 1: Write the component**
+This task adds the reusable Liquid Glass classes every later UI task (`PostForm`, home page)
+builds on, then uses them immediately in the popup: `.app-backdrop` (the fixed gradient wash
+behind everything — glass has nothing to blur without it), `.glass-panel` (cards/modals),
+`.glass-input` (text inputs/textareas), `.glass-button` / `.glass-button-primary` /
+`.glass-button-danger` (the three button treatments). All are plain CSS in `app/globals.css`
+under `@layer components`, matching this project's existing `@media (prefers-color-scheme: dark)`
+strategy (no `dark:` class toggle is wired up, so these use the same media query, not Tailwind's
+`dark:` variant).
+
+- [ ] **Step 1: Add the Liquid Glass tokens to `app/globals.css`**
+
+Append to the end of the existing file (keep the existing `:root`, `@theme inline`, and dark-mode
+block untouched):
+
+```css
+@layer components {
+  .app-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 15% 10%, rgb(199 210 254 / 0.35), transparent 45%),
+      radial-gradient(circle at 85% 25%, rgb(196 234 221 / 0.35), transparent 45%),
+      linear-gradient(180deg, #eef1f6, #dfe4ec);
+  }
+
+  .glass-panel {
+    position: relative;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(255 255 255 / 0.55);
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.2));
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.7),
+      0 12px 40px rgb(15 23 42 / 0.1);
+  }
+
+  .glass-input {
+    border-radius: 0.875rem;
+    border: 1px solid rgb(255 255 255 / 0.6);
+    background: rgb(255 255 255 / 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #171717;
+  }
+  .glass-input:focus {
+    outline: none;
+    border-color: rgb(37 99 235 / 0.6);
+    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.18);
+  }
+
+  .glass-button {
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / 0.55);
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.18));
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65);
+    color: #171717;
+    transition: transform 120ms ease;
+  }
+  .glass-button:active {
+    transform: scale(0.97);
+  }
+
+  .glass-button-primary {
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / 0.35);
+    background: linear-gradient(135deg, rgb(37 99 235 / 0.92), rgb(29 78 216 / 0.92));
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      0 8px 24px rgb(37 99 235 / 0.35);
+    color: #ffffff;
+    transition: transform 120ms ease;
+  }
+  .glass-button-primary:active {
+    transform: scale(0.97);
+  }
+
+  .glass-button-danger {
+    border-radius: 999px;
+    border: 1px solid rgb(255 255 255 / 0.5);
+    background: linear-gradient(135deg, rgb(220 38 38 / 0.16), rgb(220 38 38 / 0.06));
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    color: rgb(185 28 28);
+    transition: transform 120ms ease;
+  }
+  .glass-button-danger:active {
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .app-backdrop {
+    background:
+      radial-gradient(circle at 15% 10%, rgb(99 102 241 / 0.18), transparent 45%),
+      radial-gradient(circle at 85% 25%, rgb(16 185 129 / 0.14), transparent 45%),
+      linear-gradient(180deg, #0b0d12, #05060a);
+  }
+  .glass-panel {
+    border-color: rgb(255 255 255 / 0.12);
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.03));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.14),
+      0 12px 40px rgb(0 0 0 / 0.5);
+  }
+  .glass-input {
+    border-color: rgb(255 255 255 / 0.14);
+    background: rgb(255 255 255 / 0.06);
+    color: #ededed;
+  }
+  .glass-button {
+    border-color: rgb(255 255 255 / 0.14);
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+    color: #ededed;
+  }
+  .glass-button-danger {
+    background: linear-gradient(135deg, rgb(248 113 113 / 0.18), rgb(248 113 113 / 0.06));
+    color: rgb(252 165 165);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel,
+  .glass-input {
+    background: rgb(255 255 255 / 0.96);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .glass-button,
+  .glass-button-primary,
+  .glass-button-danger {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+```
+
+- [ ] **Step 2: Mount the backdrop layer in the root layout**
+
+In `app/layout.tsx`, add the backdrop `div` as the first child of `<body>`, before `{children}`:
+
+```tsx
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="min-h-full flex flex-col">
+        <div className="app-backdrop" aria-hidden="true" />
+        {children}
+      </body>
+    </html>
+```
+
+- [ ] **Step 3: Write the modal component using the new glass classes**
 
 ```tsx
 // app/components/ViewPostModal.tsx
@@ -1366,31 +1540,31 @@ interface ViewPostModalProps {
 
 export function ViewPostModal({ url, onClose }: ViewPostModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-3xl rounded-lg bg-white shadow-xl dark:bg-zinc-900">
-        <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="glass-panel w-full max-w-3xl p-0">
+        <div className="flex items-center justify-between border-b border-white/30 px-5 py-3.5 dark:border-white/10">
           <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-50">Published</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50"
+            className="text-sm text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
           >
             Close
           </button>
         </div>
-        <div className="p-4">
+        <div className="p-5">
           <a
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-medium text-blue-600 hover:underline"
+            className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
           >
             View on site →
           </a>
           <iframe
             src={url}
             title="Published post preview"
-            className="mt-3 h-[60vh] w-full rounded border border-zinc-200 dark:border-zinc-800"
+            className="mt-3 h-[60vh] w-full rounded-2xl border border-white/30 dark:border-white/10"
           />
         </div>
       </div>
@@ -1399,16 +1573,34 @@ export function ViewPostModal({ url, onClose }: ViewPostModalProps) {
 }
 ```
 
-- [ ] **Step 2: Type-check**
+- [ ] **Step 4: Type-check**
 
 Run: `pnpm exec tsc --noEmit`
-Expected: No errors referencing `app/components/ViewPostModal.tsx`.
+Expected: No errors referencing `app/globals.css`, `app/layout.tsx`, or `app/components/ViewPostModal.tsx`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Eyeball it in the browser**
+
+Run: `pnpm dev`, open `http://localhost:3000`, and in the browser console run:
+
+```js
+document.body.insertAdjacentHTML(
+  "beforeend",
+  '<div style="position:fixed;inset:0;z-index:9999" id="__glass_check"></div>'
+);
+```
+
+then temporarily render `<ViewPostModal url="https://example.com" onClose={() => {}} />` at the
+bottom of `app/page.tsx` to confirm the panel actually shows blur/translucency over the gradient
+backdrop, in both light and dark OS mode. Remove the temporary render before moving on — this is a
+visual smoke check, not a permanent change.
+Expected: a frosted, translucent panel with a soft top highlight, readable text, no plain
+white/black flat card.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add app/components/ViewPostModal.tsx
-git commit -m "feat: add publish/view popup component"
+git add app/globals.css app/layout.tsx app/components/ViewPostModal.tsx
+git commit -m "feat: add Liquid Glass design tokens and publish/view popup"
 ```
 
 ---
@@ -1488,9 +1680,12 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
   }
 
   return (
-    <form className="mx-auto flex max-w-2xl flex-col gap-6 py-10" onSubmit={(event) => event.preventDefault()}>
+    <form
+      className="glass-panel mx-auto flex max-w-2xl flex-col gap-6 px-8 py-8"
+      onSubmit={(event) => event.preventDefault()}
+    >
       {error && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-2xl border border-red-300/60 bg-red-50/70 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}
@@ -1498,7 +1693,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Title</span>
         <input
-          className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input px-3 py-2 text-sm"
           value={values.title}
           onChange={(event) => updateField("title", event.target.value)}
           required
@@ -1507,11 +1702,11 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">HTML content</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">
           Converted to Wix&apos;s rich-content format on save.
         </span>
         <textarea
-          className="h-48 rounded border border-zinc-300 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input h-48 px-3 py-2 font-mono text-sm"
           value={values.html}
           onChange={(event) => updateField("html", event.target.value)}
           required
@@ -1520,11 +1715,11 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Excerpt</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          Leave blank — Wix generates one from your content automatically.
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">
+          Leave blank. Wix generates one from your content automatically.
         </span>
         <textarea
-          className="h-20 rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input h-20 px-3 py-2 text-sm"
           value={values.excerpt}
           onChange={(event) => updateField("excerpt", event.target.value)}
         />
@@ -1532,9 +1727,9 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Hashtags</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">Comma-separated.</span>
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">Comma-separated.</span>
         <input
-          className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input px-3 py-2 text-sm"
           value={values.hashtags}
           onChange={(event) => updateField("hashtags", event.target.value)}
         />
@@ -1544,6 +1739,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
         <label className="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100">
           <input
             type="checkbox"
+            className="accent-blue-600"
             checked={values.featured}
             onChange={(event) => updateField("featured", event.target.checked)}
           />
@@ -1552,6 +1748,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
         <label className="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100">
           <input
             type="checkbox"
+            className="accent-blue-600"
             checked={values.commentingEnabled}
             onChange={(event) => updateField("commentingEnabled", event.target.checked)}
           />
@@ -1562,7 +1759,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Language</span>
         <input
-          className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input px-3 py-2 text-sm"
           value={values.language}
           onChange={(event) => updateField("language", event.target.value)}
         />
@@ -1570,11 +1767,11 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Cover image URL</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">
           Imported into Wix Media so it can be used as the post&apos;s cover.
         </span>
         <input
-          className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input px-3 py-2 text-sm"
           value={values.coverImageUrl}
           onChange={(event) => updateField("coverImageUrl", event.target.value)}
         />
@@ -1582,12 +1779,12 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">SEO title</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          Written to the page&apos;s SEO tags once the post exists — a separate Wix API from the
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">
+          Written to the page&apos;s SEO tags once the post exists. A separate Wix API from the
           post itself. Defaults to the title above if left blank.
         </span>
         <input
-          className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input px-3 py-2 text-sm"
           value={values.seoTitle}
           onChange={(event) => updateField("seoTitle", event.target.value)}
         />
@@ -1595,9 +1792,9 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <label className="flex flex-col gap-1">
         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">SEO meta description</span>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">Defaults to the excerpt above if left blank.</span>
+        <span className="text-xs text-zinc-600 dark:text-zinc-400">Defaults to the excerpt above if left blank.</span>
         <textarea
-          className="h-20 rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="glass-input h-20 px-3 py-2 text-sm"
           value={values.seoDescription}
           onChange={(event) => updateField("seoDescription", event.target.value)}
         />
@@ -1608,7 +1805,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
           type="button"
           disabled={isSaving}
           onClick={() => handleSubmit(false)}
-          className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-100"
+          className="glass-button px-5 py-2.5 text-sm font-medium disabled:opacity-50"
         >
           Save as draft
         </button>
@@ -1616,7 +1813,7 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
           type="button"
           disabled={isSaving}
           onClick={() => handleSubmit(true)}
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          className="glass-button-primary px-5 py-2.5 text-sm font-medium disabled:opacity-50"
         >
           Save &amp; publish
         </button>
@@ -1783,86 +1980,88 @@ export default function Home() {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-6 px-6 py-10 md:px-12">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10 md:px-12">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Content Hub</h1>
-        <Link
-          href="/posts/new"
-          className="rounded bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-        >
+        <Link href="/posts/new" className="glass-button-primary px-5 py-2.5 text-sm font-medium">
           New post
         </Link>
       </div>
 
       {error && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <p className="rounded-2xl border border-red-300/60 bg-red-50/70 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}
 
-      {isLoading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
-      ) : posts.length === 0 ? (
-        <p className="text-sm text-zinc-500">No posts yet.</p>
-      ) : (
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800">
-              <th className="py-2">Title</th>
-              <th className="py-2">Status</th>
-              <th className="py-2">Hashtags</th>
-              <th className="py-2">Last edited</th>
-              <th className="py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {posts.map((post) => (
-              <tr key={post.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                <td className="py-2 font-medium text-zinc-900 dark:text-zinc-100">{post.title}</td>
-                <td className="py-2 capitalize text-zinc-600 dark:text-zinc-400">{post.status}</td>
-                <td className="py-2 text-zinc-600 dark:text-zinc-400">{post.hashtags.join(", ")}</td>
-                <td className="py-2 text-zinc-600 dark:text-zinc-400">
-                  {post.editedDate ? new Date(post.editedDate).toLocaleDateString() : "—"}
-                </td>
-                <td className="py-2">
-                  <div className="flex justify-end gap-3">
-                    <Link href={`/posts/${post.id}/edit`} className="text-blue-600 hover:underline">
-                      Edit
-                    </Link>
-                    {post.status === "draft" && (
+      <div className="glass-panel p-6">
+        {isLoading ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
+        ) : posts.length === 0 ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">No posts yet.</p>
+        ) : (
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/30 text-zinc-600 dark:border-white/10 dark:text-zinc-400">
+                <th className="py-2">Title</th>
+                <th className="py-2">Status</th>
+                <th className="py-2">Hashtags</th>
+                <th className="py-2">Last edited</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {posts.map((post) => (
+                <tr key={post.id} className="border-b border-white/20 last:border-0 dark:border-white/5">
+                  <td className="py-2.5 font-medium text-zinc-900 dark:text-zinc-100">{post.title}</td>
+                  <td className="py-2.5 capitalize text-zinc-600 dark:text-zinc-400">{post.status}</td>
+                  <td className="py-2.5 text-zinc-600 dark:text-zinc-400">{post.hashtags.join(", ")}</td>
+                  <td className="py-2.5 text-zinc-600 dark:text-zinc-400">
+                    {post.editedDate ? new Date(post.editedDate).toLocaleDateString() : "-"}
+                  </td>
+                  <td className="py-2.5">
+                    <div className="flex justify-end gap-3">
+                      <Link
+                        href={`/posts/${post.id}/edit`}
+                        className="text-blue-600 hover:underline dark:text-blue-400"
+                      >
+                        Edit
+                      </Link>
+                      {post.status === "draft" && (
+                        <button
+                          type="button"
+                          disabled={busyId === post.id}
+                          onClick={() => handlePublish(post.id)}
+                          className="text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+                        >
+                          Publish
+                        </button>
+                      )}
+                      {post.status === "published" && post.url && (
+                        <button
+                          type="button"
+                          onClick={() => setViewUrl(post.url ?? null)}
+                          className="text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          View live
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={busyId === post.id}
-                        onClick={() => handlePublish(post.id)}
-                        className="text-blue-600 hover:underline disabled:opacity-50"
+                        onClick={() => handleDelete(post.id)}
+                        className="text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
                       >
-                        Publish
+                        Delete
                       </button>
-                    )}
-                    {post.status === "published" && post.url && (
-                      <button
-                        type="button"
-                        onClick={() => setViewUrl(post.url ?? null)}
-                        className="text-blue-600 hover:underline"
-                      >
-                        View live
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={busyId === post.id}
-                      onClick={() => handleDelete(post.id)}
-                      className="text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {viewUrl && <ViewPostModal url={viewUrl} onClose={() => setViewUrl(null)} />}
     </main>
