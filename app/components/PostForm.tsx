@@ -1,6 +1,7 @@
 // app/components/PostForm.tsx
 "use client";
 
+import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PostFormSnapshot } from "@/utils/wix-blog";
@@ -35,7 +36,11 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
     setValues((current) => ({ ...current, [key]: value }));
   }
 
-  async function handleSubmit(publish: boolean) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const publish = submitter?.value === "publish";
+
     setIsSaving(true);
     setError(null);
     try {
@@ -67,10 +72,14 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
   return (
     <form
       className="glass-panel mx-auto flex max-w-2xl flex-col gap-6 px-8 py-8"
-      onSubmit={(event) => event.preventDefault()}
+      onSubmit={handleSubmit}
     >
       {error && (
-        <p className="rounded-2xl border border-red-300/60 bg-red-50/70 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+        <p
+          role="alert"
+          aria-live="polite"
+          className="rounded-2xl border border-red-300/60 bg-red-50/70 px-3 py-2 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300"
+        >
           {error}
         </p>
       )}
@@ -187,20 +196,22 @@ export function PostForm({ postId, initialValues }: PostFormProps) {
 
       <div className="flex gap-3">
         <button
-          type="button"
+          type="submit"
+          name="action"
+          value="draft"
           disabled={isSaving}
-          onClick={() => handleSubmit(false)}
           className="glass-button px-5 py-2.5 text-sm font-medium disabled:opacity-50"
         >
-          Save as draft
+          {isSaving ? "Saving…" : "Save as draft"}
         </button>
         <button
-          type="button"
+          type="submit"
+          name="action"
+          value="publish"
           disabled={isSaving}
-          onClick={() => handleSubmit(true)}
           className="glass-button-primary px-5 py-2.5 text-sm font-medium disabled:opacity-50"
         >
-          Save &amp; publish
+          {isSaving ? "Saving…" : "Save & publish"}
         </button>
       </div>
     </form>
