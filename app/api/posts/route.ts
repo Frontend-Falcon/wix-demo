@@ -35,12 +35,12 @@ interface CreatePostRequest {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as CreatePostRequest;
-  if (!body.title?.trim() || !body.html?.trim()) {
-    return Response.json({ error: "title and html are required" }, { status: 400 });
-  }
-
   try {
+    const body = (await request.json()) as CreatePostRequest;
+    if (!body.title?.trim() || !body.html?.trim()) {
+      return Response.json({ error: "title and html are required" }, { status: 400 });
+    }
+
     const id = await createDraftPost(body, body.html, body.coverImageUrl);
     if (body.publish) await publishDraftPost(id);
     await writeSeoTags(id, { title: body.seoTitle, description: body.seoDescription });
