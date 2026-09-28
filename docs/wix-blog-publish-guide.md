@@ -52,7 +52,7 @@ flowchart TD
     A["Content Hub blog post in HTML"] --> E
     E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix\nPOST /ricos/v1/ricos-document/convert/to-ricos"] --> C
     C["Upload those pictures,\nwait till ready, place them back in\nPOST /site-media/v1/files/import (remote)\nPOST /site-media/v1/files/generate-upload-url + PUT (local)\nGET /site-media/v1/files/{id} (poll)"] --> H
-    Cover["Upload the cover photo too\nsame Media Manager endpoints as C"] --> H
+    Cover["Upload the cover photo too\nPOST /site-media/v1/files/import (remote)\nPOST /site-media/v1/files/generate-upload-url + PUT (local)\nGET /site-media/v1/files/{id} (poll)"] --> H
     G["Figure out who the author is\n(look them up, or create them)\nGET /members/v1/members\nPOST /members/v1/members"] --> H
     H["Put it all together:\ntitle, author, content, cover photo"]
     H --> J["Send the finished post to Wix\nPOST /blog/v3/draft-posts"]
