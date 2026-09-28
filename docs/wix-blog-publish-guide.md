@@ -50,14 +50,15 @@ Users write in HTML/rich text; Wix's Blog API does not accept HTML — it requir
 ```mermaid
 flowchart TD
     A["Content Hub blog post in HTML"] --> E
-    E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix"] --> C
-    C["Upload those pictures,\nwait till ready, place them back in"] --> H
-    Cover["Upload the cover photo too"] --> H
-    G["Figure out who the author is\n(look them up, or create them)"] --> H
+    E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix\nPOST /ricos/v1/ricos-document/convert/to-ricos"] --> C
+    C["Upload those pictures,\nwait till ready, place them back in\nPOST /site-media/v1/files/import (remote)\nPOST /site-media/v1/files/generate-upload-url + PUT (local)\nGET /site-media/v1/files/{id} (poll)"] --> H
+    Cover["Upload the cover photo too\nsame Media Manager endpoints as C"] --> H
+    G["Figure out who the author is\n(look them up, or create them)\nGET /members/v1/members\nPOST /members/v1/members"] --> H
     H["Put it all together:\ntitle, author, content, cover photo"]
-    H --> J["Send the finished post to Wix"]
-    J --> K{"Publish now?"}
-    K -->|yes| L["Post goes live"]
+    H --> J["Send the finished post to Wix\nPOST /blog/v3/draft-posts"]
+    J --> N["Set SEO title & meta description\nGET /promote/seo/v1/item-seo-tags/BLOG_POST/{postId}\nPOST /promote/seo/v1/item-seo-tags/BLOG_POST/{postId}"]
+    N --> K{"Publish now?"}
+    K -->|yes| L["Post goes live\npublish: true on draft-posts call,\nor POST /blog/v3/draft-posts/{id}/publish"]
     K -->|no| M["Saved as a draft"]
 ```
 
@@ -69,8 +70,9 @@ flowchart TD
 4. **Splice results back into the tree.** Each matched `IMAGE` node's `src` becomes `{ id }`, plus the `width`/`height` (and `altText`, if available) Wix now requires on that node.
 5. **Resolve the author.** The Blog API requires `memberId` on every `draftPost` created by a third-party app — there's no "current user" concept from an app token. List members and pick one (e.g. a configured default, or the one tied to the install), and only fall back to creating a new member if none exists yet. Do this resolution once per site/install and cache it — it's the same author for every post from that connection, not a per-publish lookup.
 6. **Cover image is not a Ricos node — handle it independently.** It goes through the same import path as body images, but its resulting file id lands on `draftPost.heroImage`, not spliced into `richContent`. Because it's the most visible image on the post, prefer failing the whole publish over silently shipping without a cover, unlike the best-effort handling for inline images in step 3.
-7. **Assemble and send.** Combine `title`, `memberId`, `richContent`, `heroImage`, and any SEO fields into the `draftPost` body and `POST /blog/v3/draft-posts`. Whether to pass `publish: true` in that same call versus creating as draft then issuing a separate publish call is an implementation choice — either is a valid Blog API usage; the important part is the image and author resolution above must complete *before* this call, since the request is rejected if `richContent` still contains unresolved `id`-less image nodes.
-8. **Result.** Wix returns the post's id and, if requested via `fieldsets: ['URL']`, its live URL, to hand back to the caller.
+7. **Assemble and send.** Combine `title`, `memberId`, `richContent`, `heroImage`, and any basic SEO fields (e.g. `seoData.settings.slug`) into the `draftPost` body and `POST /blog/v3/draft-posts`. Whether to pass `publish: true` in that same call versus creating as draft then issuing a separate publish call is an implementation choice — either is a valid Blog API usage; the important part is the image and author resolution above must complete *before* this call, since the request is rejected if `richContent` still contains unresolved `id`-less image nodes.
+8. **Set the SEO title and meta description.** The response from step 7 carries the new post's id — use it as `itemId` with item type `BLOG_POST` against the **Item SEO Tags API** (`https://www.wixapis.com/promote/seo/v1/item-seo-tags/...`), not by inventing tags on the draft post body. Read-before-write still applies: `GET /item-seo-tags/BLOG_POST/{postId}` first (a freshly created post has empty/inherited tags, so this is mostly a formality), then `POST /item-seo-tags/BLOG_POST/{postId}` (Set) with the merged `tags` array and a `fieldMask` naming only what changed. This is the same write sequence as any other item type — see the [SEO tags recipe](../.claude/skills/wix-manage/references/seo/manage-seo-tags.md) for the exact request/response shape and the `resolvedTags` source rules. Do this before publish if the post must be search-ready the moment it goes live; after publish is fine if SEO can lag content by a few seconds.
+9. **Result.** Wix returns the post's id and, if requested via `fieldsets: ['URL']`, its live URL, to hand back to the caller.
 
 ### Plugins option: what it actually does
 
