@@ -50,29 +50,29 @@ Users write in HTML/rich text; Wix's Blog API does not accept HTML — it requir
 ```mermaid
 flowchart TD
     A["Content Hub blog post in HTML"] --> E
-    E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix\nPOST /ricos/v1/ricos-document/convert/to-ricos"] --> C
-    C["Upload those pictures,\nwait till ready, place them back in\nPOST /site-media/v1/files/import (remote)\nPOST /site-media/v1/files/generate-upload-url + PUT (local)\nGET /site-media/v1/files/{id} (poll)"] --> H
-    Cover["Upload the cover photo too\nPOST /site-media/v1/files/import (remote)\nPOST /site-media/v1/files/generate-upload-url + PUT (local)\nGET /site-media/v1/files/{id} (poll)"] --> H
-    G["Figure out who the author is\n(look them up, or create them)\nGET /members/v1/members\nPOST /members/v1/members"] --> H
+    E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix"] --> C
+    C["Upload those pictures,\nwait till ready, place them back in"] --> H
+    Cover["Upload the cover photo too"] --> H
+    G["Figure out who the author is\n(look them up, or create them)"] --> H
     H["Put it all together:\ntitle, author, content, cover photo"]
-    H --> J["Send the finished post to Wix\nPOST /blog/v3/draft-posts"]
-    J --> N["Set SEO title & meta description\nGET /promote/seo/v1/item-seo-tags/BLOG_POST/{postId}\nPOST /promote/seo/v1/item-seo-tags/BLOG_POST/{postId}"]
+    H --> J["Send the finished post to Wix"]
+    J --> N["Set SEO title & meta description"]
     N --> K{"Publish now?"}
-    K -->|yes| L["Post goes live\npublish: true on draft-posts call,\nor POST /blog/v3/draft-posts/{id}/publish"]
+    K -->|yes| L["Post goes live"]
     K -->|no| M["Saved as a draft"]
 ```
 
 ### Step-by-step
 
-1. **Raw HTML in.** The user's draft (rich text or pasted HTML) contains text formatting, `<img>` tags, and separately a cover image (url or uploaded file).
-2. **Convert HTML to Ricos before touching Media Manager.** `POST /ricos-document/convert/to-ricos` with the raw `html` and an `options.plugins` list (see [Plugins](#plugins-option-what-it-actually-does) below). `<img>` tags become `IMAGE` nodes that still reference the original external `src` — nothing has been uploaded yet. Doing this first, rather than pre-scanning the raw HTML for `<img>` tags, guarantees the image list matches exactly what the converter actually kept (recall not every tag survives — see the Plugins section).
-3. **Import every image the converted tree still references externally.** Walk the Ricos nodes for `IMAGE` src urls with no Media Manager `id` yet, and import each once (dedupe by url — a repeated image shouldn't upload twice). Two source cases: a **remote url** goes straight to `POST /site-media/v1/files/import`; a **local file** needs `generate-upload-url` first, then a `PUT` of the raw bytes to the returned upload url. Either way, poll `get-file-by-id` with bounded retries until real dimensions are available — a Ricos `IMAGE` node requires `width`/`height`, so don't hand it a `{0,0}` placeholder. Treat one image's `FAILED` status or a polling timeout as an isolated failure (leave that node pointing at the external url, or drop it with a logged warning) rather than aborting the whole publish over one bad image.
-4. **Splice results back into the tree.** Each matched `IMAGE` node's `src` becomes `{ id }`, plus the `width`/`height` (and `altText`, if available) Wix now requires on that node.
-5. **Resolve the author.** The Blog API requires `memberId` on every `draftPost` created by a third-party app — there's no "current user" concept from an app token. List members and pick one (e.g. a configured default, or the one tied to the install), and only fall back to creating a new member if none exists yet. Do this resolution once per site/install and cache it — it's the same author for every post from that connection, not a per-publish lookup.
-6. **Cover image is not a Ricos node — handle it independently.** It goes through the same import path as body images, but its resulting file id lands on `draftPost.heroImage`, not spliced into `richContent`. Because it's the most visible image on the post, prefer failing the whole publish over silently shipping without a cover, unlike the best-effort handling for inline images in step 3.
-7. **Assemble and send.** Combine `title`, `memberId`, `richContent`, `heroImage`, and any basic SEO fields (e.g. `seoData.settings.slug`) into the `draftPost` body and `POST /blog/v3/draft-posts`. Whether to pass `publish: true` in that same call versus creating as draft then issuing a separate publish call is an implementation choice — either is a valid Blog API usage; the important part is the image and author resolution above must complete *before* this call, since the request is rejected if `richContent` still contains unresolved `id`-less image nodes.
-8. **Set the SEO title and meta description.** The response from step 7 carries the new post's id — use it as `itemId` with item type `BLOG_POST` against the **Item SEO Tags API** (`https://www.wixapis.com/promote/seo/v1/item-seo-tags/...`), not by inventing tags on the draft post body. Read-before-write still applies: `GET /item-seo-tags/BLOG_POST/{postId}` first (a freshly created post has empty/inherited tags, so this is mostly a formality), then `POST /item-seo-tags/BLOG_POST/{postId}` (Set) with the merged `tags` array and a `fieldMask` naming only what changed. This is the same write sequence as any other item type — see the [SEO tags recipe](../.claude/skills/wix-manage/references/seo/manage-seo-tags.md) for the exact request/response shape and the `resolvedTags` source rules. Do this before publish if the post must be search-ready the moment it goes live; after publish is fine if SEO can lag content by a few seconds.
-9. **Result.** Wix returns the post's id and, if requested via `fieldsets: ['URL']`, its live URL, to hand back to the caller.
+1. **Raw HTML in.** User's draft: text formatting, `<img>` tags, plus a separate cover image (url or file).
+2. **Convert HTML → Ricos.** `POST /ricos-document/convert/to-ricos` with `html` + `options.plugins` (see [Plugins](#plugins-option-what-it-actually-does)). `<img>` → `IMAGE` nodes still pointing at the original external `src` — nothing uploaded yet. Convert first, don't pre-scan raw HTML for `<img>`: guarantees the image list matches what the converter actually kept.
+3. **Import externally-referenced images.** Walk `IMAGE` nodes with no Media Manager `id`, import each once (dedupe by url). Remote url → `POST /site-media/v1/files/import`. Local file → `generate-upload-url` then `PUT` the bytes. Either way, poll `get-file-by-id` (bounded retries) for real `width`/`height` — never hand Ricos a `{0,0}` placeholder. One `FAILED`/timeout = drop or leave-external with a warning, not an aborted publish.
+4. **Splice results back.** Matched `IMAGE` node's `src` → `{ id }`, plus `width`/`height` (and `altText` if available).
+5. **Resolve the author.** `draftPost.memberId` is required — no "current user" from an app token. List members, pick one (default/install-linked), create only if none exist. Resolve once per site/install and cache — same author every post, not a per-publish lookup.
+6. **Cover image, handled separately.** Same import path as step 3, but its file id lands on `draftPost.heroImage`, not spliced into `richContent`. Most visible image on the post → fail the whole publish rather than ship without it (unlike the best-effort handling in step 3).
+7. **Assemble and send.** `title` + `memberId` + `richContent` + `heroImage` + basic SEO (e.g. `seoData.settings.slug`) → `POST /blog/v3/draft-posts`. `publish: true` inline vs. separate publish call is an implementation choice either way. Must run after steps 3–6: request is rejected if `richContent` still has unresolved `id`-less image nodes.
+8. **Set SEO title/meta description.** Use the post id from step 7 as `itemId`, type `BLOG_POST`, against the Item SEO Tags API (`https://www.wixapis.com/promote/seo/v1/item-seo-tags/...`) — not fields on the draft post. `GET .../item-seo-tags/BLOG_POST/{postId}` then `POST` the same path (Set) with merged `tags` + a `fieldMask` naming only what changed. Same write sequence as any item type — see the [SEO tags recipe](../.claude/skills/wix-manage/references/seo/manage-seo-tags.md). Before or after publish both work; before if the post must be search-ready at go-live.
+9. **Result.** Wix returns the post id, and its live URL if `fieldsets: ['URL']` was requested.
 
 ### Plugins option: what it actually does
 
@@ -107,9 +107,5 @@ Practical implication for product: our plugin list must be a superset of every t
 
 **Why this trade-off is intentional, not a bug:** Ricos is the same structured format the Wix Blog/Site Editor itself edits in. Because the published post is stored as Ricos nodes (not as opaque raw HTML), the site owner can reopen it in the Wix Editor and edit it like any native Wix blog post — move blocks, restyle text, drag in new images — the same way they'd edit a post they wrote by hand in Wix. An exact HTML→pixel copy would only be achievable by embedding the raw markup in an `HTML` embed block, which Wix's editor treats as an opaque iframe, not editable native content — and it's worse for SEO too: content inside an iframe embed isn't crawlable/indexable as page content the way native Ricos text nodes are, so an "exact copy" post would likely rank worse than the normalized one. We're trading input fidelity for output editability and SEO, and that's the correct trade for "publish to the user's own site," not a shortcut we should try to eliminate.
 
-### Failure points worth flagging to product
-
-- Image import can fail (`operationStatus: FAILED`) if the source host blocks hotlinking — we should decide the UX for "post published, one image missing" rather than blocking the whole publish.
-- An HTML tag type missing from `options.plugins` fails the same way as a hotlink-blocked image: no error, content silently absent from the published post.
 
 **Read more:** [Ricos Documents API — Introduction](https://dev.wix.com/docs/api-reference/assets/rich-content/ricos-documents/introduction) · [Rich Content overview](https://dev.wix.com/docs/api-reference/articles/work-with-wix-apis/platform/about-rich-content) · [Ricos document structure](https://dev.wix.com/docs/ricos/getting-started/introduction)
