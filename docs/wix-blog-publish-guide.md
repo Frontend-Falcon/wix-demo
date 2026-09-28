@@ -10,15 +10,15 @@ We need to use a registered **Wix App** using OAuth **Authorization Code flow** 
 
 ```mermaid
 sequenceDiagram
-    participant U as User
+    participant U as Site Owner
     participant W as Wix
     participant A as Our App
-    U->>W: Install app + approve permissions
-    W->>A: redirect: code + instanceId
-    A->>W: exchange code (client_id, secret)
-    W->>A: access_token (~5 min) + refresh_token
-    A->>W: API calls (Bearer access_token)
-    Note over A,W: access_token expires → use refresh_token, no re-consent
+    U->>W: Installs app, approves access
+    W->>A: Sends a one-time login code
+    A->>W: Trades code for a "pass"
+    W->>A: Sends short-lived pass (5 min) + long-lived renewal key
+    A->>W: Uses pass to publish posts
+    Note over A,W: Pass expires every 5 min - app renews it quietly, owner does nothing
 ```
 
 - **Access token lifetime:** `expires_in` ~**300 seconds (5 min)**. Refresh via `refresh_token` — long-lived until the user uninstalls/revokes, no re-consent needed.
@@ -49,20 +49,16 @@ Users write in HTML/rich text; Wix's Blog API does not accept HTML — it requir
 
 ```mermaid
 flowchart TD
-    A["Raw HTML from editor\n(text + inline <img> tags, cover image url/file)"] --> E
-    E["POST /ricos-document/convert/to-ricos\n{ html, options.plugins: [...] }\n→ Ricos nodes for every tag a listed plugin covers"] --> B
-    B["Walk resulting Ricos nodes, collect every\nIMAGE node whose src is still an external url"] --> C
-    C["Import each external image\nremote url → POST /site-media/v1/files/import\nlocal file → generate-upload-url, then PUT the bytes"]
-    C --> D["Poll get-file-by-id until dims ready\n(bounded retries; treat FAILED / timeout as\nper-image failure, not a hard stop)"]
-    D --> F["Splice returned file id + width/height/altText\nback into the matching IMAGE node"]
-    F --> H
-    Cover["Cover image: same import path,\nresult becomes draftPost.heroImage"] --> H
-    G["Resolve post author\nGET /members/v1/members?filter=...\n(if none found: POST /members/v1/members)"] --> H
-    H["Assemble draftPost body:\ntitle, memberId, richContent, heroImage, seo"]
-    H --> J["POST /blog/v3/draft-posts\n{ draftPost, publish: true|false }"]
-    J --> K{"publish?"}
-    K -->|yes| L["Post is live — return id + URL"]
-    K -->|no| M["Saved as draft — return id"]
+    A["Content Hub blog post in HTML"] --> E
+    E["Convert text to Wix's format,\nfind external pictures\nthat need uploading to Wix"] --> C
+    C["Upload those pictures,\nwait till ready, place them back in"] --> H
+    Cover["Upload the cover photo too"] --> H
+    G["Figure out who the author is\n(look them up, or create them)"] --> H
+    H["Put it all together:\ntitle, author, content, cover photo"]
+    H --> J["Send the finished post to Wix"]
+    J --> K{"Publish now?"}
+    K -->|yes| L["Post goes live"]
+    K -->|no| M["Saved as a draft"]
 ```
 
 ### Step-by-step
