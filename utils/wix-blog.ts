@@ -4,6 +4,7 @@ import { buildDraftPostBody, type DraftPostBody, type PostFormInput } from "./po
 import { collectExternalImageUrls, replaceExternalImageSrcs, type RicosDocument } from "./ricos-images";
 import { importExternalImage } from "./wix-media";
 import { extractSeoValues, mergeSeoTags, type SeoTag } from "./seo";
+import { inlineEmbeddedTextStyles } from "./html-inline-styles";
 
 export interface PostListItem {
   id: string;
@@ -59,7 +60,7 @@ export async function convertHtmlToRicos(html: string): Promise<RicosDocument> {
     {
       method: "POST",
       body: JSON.stringify({
-        html: unwrapJsonEncodedHtml(html),
+        html: inlineEmbeddedTextStyles(unwrapJsonEncodedHtml(html)),
         options: {
           plugins: ["HEADING", "LINK", "IMAGE", "TEXT_COLOR", "TEXT_HIGHLIGHT", "DIVIDER", "TABLE"],
         },
